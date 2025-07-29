@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Warehouse Attendance System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f9f9f9; }
+        .container { max-width: 500px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        input, select, button { padding: 10px; margin-top: 10px; width: 100%; border-radius: 5px; border: 1px solid #ccc; }
+        .info { margin-top: 15px; background: #f1f1f1; padding: 10px; border-radius: 5px; }
+        .info p { margin: 5px 0; }
+        #remark { margin-top: 10px; font-weight: bold; color: green; }
+        #remark.error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Warehouse Attendance</h2>
+
+    <label for="date">Select Date</label>
+    <input type="date" id="date" required>
+
+    <label for="action">Action</label>
+    <select id="action">
+        <option value="IN">IN</option>
+        <option value="OUT">OUT</option>
+    </select>
+
+    <label for="emp_id">Employee ID</label>
+    <input type="text" id="emp_id" placeholder="Enter Employee ID" required autocomplete="off">
+
+    <div class="info">
+        <p><strong>Full Name:</strong> <span id="name"></span></p>
+        <p><strong>Department:</strong> <span id="department"></span></p>
+        <p><strong>Position:</strong> <span id="position"></span></p>
+    </div>
+
+    <p id="remark"></p>
+</div>
+
+<script>
+    const empIdInput = document.getElementById("emp_id");
+    let employeeFound = false;
+
+    empIdInput.addEventListener("keyup", function(event) {
+        if (event.key === "Enter") {
+            const empId = empIdInput.value.trim();
+            if (!empId) {
+                setRemark("Please enter an Employee ID.", true);
+                return;
+            }
+
+            if (!employeeFound) {
+                fetch("/get_employee", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ emp_id: empId })
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error("Employee not found");
+                    return res.json();
+                })
+                .then(data => {
+                    employeeFound = true;
+                    document.getElementById("name").innerText = data.name;
+                    document.getElementById("department").innerText = data.department;
+                    document.getElementById("position").innerText = data.position;
+                    setRemark("Employee found. Press Enter again to mark attendance.", false);
+                })
+                .catch(() => {
+                    setRemark("Employee ID not found.", true);
+                    clearEmployeeInfo();
+                    employeeFound = false;
+                });
+            } else {
+                // Check date input
+                const date = document.getElementById("date").value;
+                if (!date) {
+                    setRemark("Please select a date.", true);
+                    return;
+                }
+
+                const action = document.getElementById("action").value;
+                fetch("/submit", {   // Use "/submit" to match Flask route
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ emp_id: empId, date: formatDate(date), action: action })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    setRemark(data.remark || "Attendance updated.", false);
+                    empIdInput.value = "";
+                    clearEmployeeInfo();
+                    employeeFound = false;
+                })
+                .catch(() => {
+                    setRemark("Failed to submit attendance.", true);
+                });
+            }
+        }
+    });
+
+    function setRemark(msg, isError) {
+        const remarkEl = document.getElementById("remark");
+        remarkEl.innerText = msg;
+        remarkEl.className = isError ? "error" : "";
+    }
+
+    function clearEmployeeInfo() {
+        document.getElementById("name").innerText = "";
+        document.getElementById("department").innerText = "";
+        document.getElementById("position").innerText = "";
+    }
+
+    // Format date as dd-mm-yyyy because your Flask expects that format
+    function formatDate(inputDate) {
+        const d = new Date(inputDate);
+        const day = ("0" + d.getDate()).slice(-2);
+        const month = ("0" + (d.getMonth() + 1)).slice(-2);
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+    }
+</script>
+</body>
+</html>
